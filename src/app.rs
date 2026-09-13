@@ -3,13 +3,12 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::thread;
-use std::time::Instant;
 
 use anyhow::{Context as _, Result, anyhow};
 use chrono::Local;
 use egui::{
-    Button, Color32, Context, DragValue, Id, Key, KeyboardShortcut, Modal, Modifiers, OpenUrl,
-    PointerButton, RichText, Sense, ViewportCommand,
+    Button, Color32, Context, Id, Key, KeyboardShortcut, Modal, Modifiers, OpenUrl, PointerButton,
+    RichText, Sense, ViewportCommand,
 };
 use egui_file_dialog::FileDialog;
 use egui_notify::Toasts;
@@ -17,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::monitor::Monitor;
-use crate::player_data::ExportSettings;
 use crate::update::check_for_app_update;
 use crate::{
     AppState, ConfirmationType, Message, ReloadHandle, State, TracingLevel, admin, capture,
@@ -26,10 +24,10 @@ use crate::{
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SavedAppState {
-    export_settings: ExportSettings,
+    #[serde(default)]
+    selection: irminsul_core::DataSelection,
     #[serde(default)]
     auto_start_capture: bool,
-    log_raw_packets: bool,
     #[serde(default)]
     tracing_level: TracingLevel,
 }
@@ -37,24 +35,8 @@ pub struct SavedAppState {
 impl Default for SavedAppState {
     fn default() -> Self {
         Self {
-            export_settings: ExportSettings {
-                include_characters: true,
-                include_artifacts: true,
-                include_weapons: true,
-                include_materials: true,
-                fake_initialize_4th_line: false,
-                min_character_level: 1,
-                min_character_ascension: 0,
-                min_character_constellation: 0,
-                min_artifact_level: 0,
-                min_artifact_rarity: 5,
-                min_weapon_level: 1,
-                min_weapon_refinement: 0,
-                min_weapon_ascension: 0,
-                min_weapon_rarity: 3,
-            },
+            selection: irminsul_core::DataSelection::default(),
             auto_start_capture: false,
-            log_raw_packets: false,
             tracing_level: Default::default(),
         }
     }
@@ -71,7 +53,6 @@ pub struct IrminsulApp {
     ui_message_tx: mpsc::UnboundedSender<Message>,
     state_rx: watch::Receiver<AppState>,
     wish_url_rx: watch::Receiver<Option<String>>,
-    log_packets_tx: watch::Sender<bool>,
     tracing_reload_handle: ReloadHandle,
 
     toasts: Toasts,
@@ -80,8 +61,8 @@ pub struct IrminsulApp {
     bug_report_open: bool,
 
     capture_settings_open: bool,
+    selected_uid: Option<String>,
 
-    optimizer_settings_open: bool,
     optimizer_export_rx: Option<oneshot::Receiver<Result<String>>>,
     optimizer_save_dialog: Option<FileDialog>,
     optimizer_save_path: Option<PathBuf>,
@@ -192,7 +173,7 @@ impl IrminsulApp {
         };
 
         tracing_reload_handle.set_filter(saved_state.tracing_level.get_filter());
-        let (log_packets_tx, log_packets_rx) = watch::channel(saved_state.log_raw_packets);
+        let (_log_packets_tx, log_packets_rx) = watch::channel(false);
         let (ui_message_tx, state_rx, wish_url_rx) =
             start_async_runtime(cc.egui_ctx.clone(), log_packets_rx, capture_backend);
 
@@ -207,13 +188,12 @@ impl IrminsulApp {
         Self {
             saved_state,
             ui_message_tx,
-            log_packets_tx,
             tracing_reload_handle,
             toasts,
             power_tools_open: false,
             bug_report_open: false,
             capture_settings_open: false,
-            optimizer_settings_open: false,
+            selected_uid: None,
             optimizer_export_rx: None,
             optimizer_save_dialog: None,
             optimizer_save_path: None,
@@ -513,21 +493,12 @@ impl IrminsulApp {
             }
         }
 
-        if self.optimizer_settings_open {
-            let modal = Modal::new(Id::new("Optimizer Settings")).show(ui.ctx(), |ui| {
-                self.optimizer_settings_modal(ui);
-            });
-            if modal.should_close() {
-                self.optimizer_settings_open = false;
-            }
-        }
         self.capture_ui(ui, app_state);
         ui.separator();
         self.genshin_optimizer_ui(ui, app_state);
         ui.separator();
         self.wish_ui(ui);
         ui.separator();
-        self.achievement_ui(ui, app_state);
     }
 
     fn capture_ui(&mut self, ui: &mut egui::Ui, app_state: &AppState) {
@@ -546,60 +517,41 @@ impl IrminsulApp {
                     }
 
                     if app_state.capturing {
-                        if ui.button(egui_material_icons::icons::ICON_PAUSE).clicked() {
+                        if ui.button("Stop capture").clicked() {
                             let _ = self.ui_message_tx.send(Message::StopCapture);
                         }
-                    } else if ui
-                        .button(egui_material_icons::icons::ICON_PLAY_ARROW)
-                        .clicked()
-                    {
+                    } else if ui.button("Start capture").clicked() {
                         let _ = self.ui_message_tx.send(Message::StartCapture);
                     }
                 },
             );
         });
-        egui::Grid::new("capture_stats")
-            .striped(false)
-            .num_columns(2)
-            .min_col_width(0.)
-            .show(ui, |ui| {
-                Self::data_state(ui, "Items", app_state.updated.items_updated);
-                Self::data_state(ui, "Characters", app_state.updated.characters_updated);
-                Self::data_state(ui, "Achievements", app_state.updated.achievements_updated);
-            });
-    }
-
-    fn data_state(ui: &mut egui::Ui, source: &str, last_updated: Option<Instant>) {
-        let updated_icon = match last_updated {
-            Some(_) => RichText::new(egui_material_icons::icons::ICON_CHECK_CIRCLE)
-                .color(Color32::from_hex("#00ab3f").unwrap()),
-            None => RichText::new(egui_material_icons::icons::ICON_CHECK_INDETERMINATE_SMALL),
-        };
-        ui.label(updated_icon);
-        ui.label(source);
-        ui.end_row();
+        ui.label(&app_state.capture.message);
+        if app_state.capture.phase == "error" {
+            ui.colored_label(
+                Color32::LIGHT_RED,
+                "The current login could not be captured. Earlier snapshots remain labelled below.",
+            );
+        }
+        ui.label("Start capture before entering the door. Switch accounts through the title menu while capture stays running.");
     }
 
     fn genshin_optimizer_ui(&mut self, ui: &mut egui::Ui, app_state: &AppState) {
         self.optimizer_handle_export(ui).toast_error(self);
-
+        self.account_selection_ui(ui, app_state);
         ui.vertical(|ui| {
             egui::Sides::new().show(
                 ui,
                 |ui| {
-                    Self::section_header(ui, "Genshin Optimizer");
+                    Self::section_header(ui, "Account data - GOOD export");
                 },
                 |ui| {
-                    if ui
-                        .button(egui_material_icons::icons::ICON_SETTINGS)
-                        .clicked()
-                    {
-                        self.optimizer_settings_open = true;
-                    }
-
                     ui.add_enabled_ui(
-                        app_state.updated.characters_updated.is_some()
-                            && app_state.updated.items_updated.is_some()
+                        self.selected_uid.is_some()
+                            && (self.saved_state.selection.artifacts
+                                || self.saved_state.selection.weapons
+                                || self.saved_state.selection.characters
+                                || self.saved_state.selection.materials)
                             && self.optimizer_export_rx.is_none(),
                         |ui| {
                             if ui
@@ -610,7 +562,8 @@ impl IrminsulApp {
                                 let mut optimizer_save_dialog = FileDialog::new()
                                     .add_file_filter_extensions("JSON files", vec!["json"])
                                     .default_file_name(&format!(
-                                        "genshin_export_{}.json",
+                                        "irminsul_{}_{}.json",
+                                        self.selected_uid.as_deref().unwrap_or("unknown"),
                                         now.format("%Y-%m-%d_%H-%M")
                                     ));
                                 optimizer_save_dialog.save_file();
@@ -639,10 +592,79 @@ impl IrminsulApp {
         });
     }
 
+    fn account_selection_ui(&mut self, ui: &mut egui::Ui, app_state: &AppState) {
+        if self.selected_uid.is_none() {
+            self.selected_uid = app_state.capture.snapshots.first().map(|s| s.uid.clone());
+        }
+        egui::ComboBox::from_id_salt("captured-account")
+            .selected_text(
+                self.selected_uid
+                    .as_deref()
+                    .unwrap_or("No captured accounts"),
+            )
+            .show_ui(ui, |ui| {
+                for snapshot in &app_state.capture.snapshots {
+                    ui.selectable_value(
+                        &mut self.selected_uid,
+                        Some(snapshot.uid.clone()),
+                        format!(
+                            "{} / {} artifacts / {} characters",
+                            snapshot.uid, snapshot.counts.artifacts, snapshot.counts.characters
+                        ),
+                    );
+                }
+            });
+        if let Some(snapshot) = app_state
+            .capture
+            .snapshots
+            .iter()
+            .find(|s| Some(&s.uid) == self.selected_uid.as_ref())
+        {
+            ui.label(format!(
+                "Snapshot: {} artifacts / {} weapons / {} characters / {} materials",
+                snapshot.counts.artifacts,
+                snapshot.counts.weapons,
+                snapshot.counts.characters,
+                snapshot.counts.materials
+            ));
+            let time = chrono::DateTime::from_timestamp_millis(snapshot.captured_at_ms as i64);
+            for warning in &snapshot.warnings {
+                ui.colored_label(Color32::YELLOW, warning);
+            }
+            if let Some(time) = time {
+                ui.label(format!(
+                    "Captured {} / inventory at login",
+                    time.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S")
+                ));
+            }
+        }
+        ui.horizontal_wrapped(|ui| {
+            let settings = &mut self.saved_state.selection;
+            ui.checkbox(&mut settings.artifacts, "Artifacts");
+            ui.checkbox(&mut settings.weapons, "Weapons");
+            ui.checkbox(&mut settings.characters, "Characters");
+            ui.checkbox(&mut settings.materials, "Materials");
+        });
+        ui.label(
+            "Exports preserve actual levels and include every rarity in the selected categories.",
+        );
+    }
+
     fn genshin_optimizer_request_export(&mut self, target: OptimizerExportTarget) {
+        let state = self.state_rx.borrow().clone();
+        let Some(snapshot) = state
+            .capture
+            .snapshots
+            .iter()
+            .find(|s| Some(&s.uid) == self.selected_uid.as_ref())
+        else {
+            return;
+        };
         let (tx, rx) = oneshot::channel();
         let _ = self.ui_message_tx.send(Message::ExportGenshinOptimizer(
-            self.saved_state.export_settings.clone(),
+            snapshot.uid.clone(),
+            snapshot.capture_id.clone(),
+            self.saved_state.selection.clone().into(),
             tx,
         ));
         self.optimizer_export_target = target;
@@ -681,12 +703,6 @@ impl IrminsulApp {
         ui.set_width(300.0);
         ui.heading("Power Tools");
         ui.separator();
-        if ui
-            .checkbox(&mut self.saved_state.log_raw_packets, "Log raw packets")
-            .changed()
-        {
-            let _ = self.log_packets_tx.send(self.saved_state.log_raw_packets);
-        };
         let prev_level = self.saved_state.tracing_level;
         egui::ComboBox::from_label("Logging Level")
             .selected_text(format!("{}", self.saved_state.tracing_level))
@@ -759,7 +775,7 @@ impl IrminsulApp {
 
     fn capture_settings_modal(&mut self, ui: &mut egui::Ui) {
         ui.set_width(300.0);
-        ui.heading("Genshin Optimizer Settings");
+        ui.heading("Capture settings");
         ui.separator();
         ui.checkbox(
             &mut self.saved_state.auto_start_capture,
@@ -777,132 +793,19 @@ impl IrminsulApp {
         );
     }
 
-    fn optimizer_settings_modal(&mut self, ui: &mut egui::Ui) {
-        ui.set_width(300.0);
-        ui.heading("Genshin Optimizer Settings");
-        ui.separator();
-        ui.checkbox(
-            &mut self.saved_state.export_settings.include_characters,
-            "Characters",
-        );
-        ui.horizontal(|ui| {
-            ui.add_space(20.);
-            egui::Grid::new("char_options")
-                .striped(true)
-                .show(ui, |ui| {
-                    ui.label("Min level".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_character_level)
-                            .range(1..=90),
-                    );
-                    ui.end_row();
-                    ui.label("Min ascension".to_string());
-                    ui.add(
-                        DragValue::new(
-                            &mut self.saved_state.export_settings.min_character_ascension,
-                        )
-                        .range(0..=6),
-                    );
-                    ui.end_row();
-                    ui.label("Min constellation".to_string());
-                    ui.add(
-                        DragValue::new(
-                            &mut self.saved_state.export_settings.min_character_constellation,
-                        )
-                        .range(0..=6),
-                    );
-                    ui.end_row();
-                });
-        });
-        ui.checkbox(
-            &mut self.saved_state.export_settings.include_artifacts,
-            "Artifacts",
-        );
-        ui.horizontal(|ui| {
-            ui.add_space(20.);
-            egui::Grid::new("artifact_options")
-                .striped(true)
-                .show(ui, |ui| {
-                    ui.label("Min level".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_artifact_level)
-                            .range(0..=20),
-                    );
-                    ui.end_row();
-                    ui.label("Min rarity".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_artifact_rarity)
-                            .range(0..=6),
-                    );
-                    ui.end_row();
-                });
-        });
-        ui.checkbox(
-            &mut self.saved_state.export_settings.include_weapons,
-            "Weapons",
-        );
-        ui.horizontal(|ui| {
-            ui.add_space(20.);
-            egui::Grid::new("weapon_options")
-                .striped(true)
-                .show(ui, |ui| {
-                    ui.label("Min level".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_weapon_level)
-                            .range(1..=90),
-                    );
-                    ui.end_row();
-
-                    ui.label("Min refinement".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_weapon_refinement)
-                            .range(1..=5),
-                    );
-                    ui.end_row();
-
-                    ui.label("Min ascension".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_weapon_ascension)
-                            .range(0..=6),
-                    );
-                    ui.end_row();
-
-                    ui.label("Min rarity".to_string());
-                    ui.add(
-                        DragValue::new(&mut self.saved_state.export_settings.min_weapon_rarity)
-                            .range(1..=5),
-                    );
-                    ui.end_row();
-                });
-        });
-        ui.checkbox(
-            &mut self.saved_state.export_settings.include_materials,
-            "Materials",
-        );
-        ui.checkbox(
-            &mut self.saved_state.export_settings.fake_initialize_4th_line,
-            "Fake level-up 5* artifacts with unactivated stats (hover for more info)"
-        ).on_hover_text(
-            "Genshin Optimizer still internally treats 5* 3-liners like pre-6.0, where the new stat is \"hidden\" and unknown to GO's optimizer.\nThis is a temporary workaround by activating that last stat line, but to prevent unintended effects, the artifacts are set to level 4, mimicking the player leveling it up.\nThe last line *should* be the unlockable 4th line."
-        );
-        ui.separator();
-        egui::Sides::new().show(
-            ui,
-            |_ui| {},
-            |ui| {
-                if ui.button("Ok").clicked() {
-                    ui.close()
-                }
-            },
-        );
-    }
-
     fn optimizer_handle_export(&mut self, ui: &mut egui::Ui) -> Result<()> {
-        let Some(rx) = self.optimizer_export_rx.take() else {
+        let Some(mut rx) = self.optimizer_export_rx.take() else {
             return Ok(());
         };
 
-        let json = rx.blocking_recv()??;
+        let json = match rx.try_recv() {
+            Ok(result) => result?,
+            Err(oneshot::error::TryRecvError::Empty) => {
+                self.optimizer_export_rx = Some(rx);
+                return Ok(());
+            }
+            Err(_) => return Err(anyhow!("Export worker closed.")),
+        };
 
         match self.optimizer_export_target {
             OptimizerExportTarget::None => {
@@ -939,11 +842,6 @@ impl IrminsulApp {
 
         self.toasts.info("Genshin Optimizer data saved to file");
         Ok(())
-    }
-
-    fn achievement_ui(&self, ui: &mut egui::Ui, _app_state: &AppState) {
-        Self::section_header(ui, "Achievement Export");
-        ui.label("coming soon".to_string());
     }
 
     fn section_header(ui: &mut egui::Ui, name: &str) {

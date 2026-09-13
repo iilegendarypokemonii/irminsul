@@ -11,6 +11,7 @@ env:
 
 jobs:
   test_matrix:
+    if: github.repository == 'konkers/irminsul'
     strategy:
       matrix:
         include:

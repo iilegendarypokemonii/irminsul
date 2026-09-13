@@ -150,9 +150,12 @@ impl Wish {
             return Ok(());
         }
 
+        // A failed replacement key must not leave a previous account's URL
+        // looking current in the wish controls.
+        let _ = self.url_tx.send(None);
         validate_url(&url).await?;
 
-        tracing::info!("found {url}");
+        tracing::info!("Validated a wish-history URL (authkey omitted)");
         self.prev_url = url.to_string();
         let _ = self.url_tx.send(Some(url));
 
@@ -208,7 +211,15 @@ async fn validate_url(url: &str) -> Result<()> {
         retcode: i32,
     }
 
-    let response: Response = reqwest::get(url).await?.error_for_status()?.json().await?;
+    let response: Response = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()?
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
     if response.retcode != 0 {
         return Err(anyhow!("error code: {}", response.retcode));
     }

@@ -1,0 +1,32 @@
+[package]
+name = "irminsul-core"
+version = "0.3.0"
+edition = "2024"
+license = "MIT"
+description = "Account-scoped Genshin login snapshots shared by Irminsul and native clients"
+
+[dependencies]
+anyhow = "1"
+anime-game-data = { git = "https://github.com/konkers/anime-game-data", rev = "dfc03cdb5e27807a876b8d4dff17b3f67a320f5c" }
+auto-artifactarium = { path = "vendor/auto-artifactarium" }
+base64 = "0.22"
+etherparse = "0.16"
+flate2 = "1"
+getrandom = "0.3"
+indexmap = "2"
+protobuf = "3.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt", "macros", "net", "io-util", "time", "sync"] }
+futures = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+pktmon = { path = "vendor/pktmon", features = ["tokio"] }
+windows = { version = "0.61", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_Com", "Win32_Security"] }
+
+[dev-dependencies]
+pcap-file = "2"
+
+[[example]]
+name = "replay"

@@ -16,14 +16,20 @@ use crate::player_data::ExportSettings;
 
 mod admin;
 mod app;
+#[cfg_attr(windows, allow(dead_code))]
 mod capture;
+#[cfg(not(windows))]
 mod good;
+#[cfg(windows)]
+#[path = "account_monitor.rs"]
+mod monitor;
+#[cfg(not(windows))]
 mod monitor;
 mod player_data;
 mod update;
 mod wish;
 
-const APP_ID: &str = "Irminsul";
+const APP_ID: &str = "Irminsul Multi-account";
 
 #[derive(Clone, Copy, Debug)]
 pub enum ConfirmationType {
@@ -55,9 +61,15 @@ pub enum Message {
     DownloadAcknowledged,
     StartCapture,
     StopCapture,
-    ExportGenshinOptimizer(ExportSettings, oneshot::Sender<Result<String>>),
+    ExportGenshinOptimizer(
+        String,
+        String,
+        ExportSettings,
+        oneshot::Sender<Result<String>>,
+    ),
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 #[derive(Clone, Debug)]
 pub struct DataUpdated {
     achievements_updated: Option<Instant>,
@@ -85,7 +97,9 @@ impl Default for DataUpdated {
 pub struct AppState {
     state: State,
     capturing: bool,
+    #[cfg_attr(windows, allow(dead_code))]
     updated: DataUpdated,
+    capture: irminsul_core::CaptureState,
 }
 
 impl AppState {
@@ -94,6 +108,7 @@ impl AppState {
             state: State::Starting,
             capturing: false,
             updated: DataUpdated::new(),
+            capture: Default::default(),
         }
     }
 }
@@ -161,23 +176,26 @@ impl ReloadHandle {
 }
 
 fn main() -> eframe::Result {
+    if let Some(result) = irminsul_core::run_helper_if_requested() {
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     let (_guard, reload_handle) = tracing_init().unwrap();
 
     let args = Args::parse();
 
     if !args.no_admin {
-        #[cfg(any(windows, unix))]
+        #[cfg(unix)]
         admin::ensure_admin();
     }
 
     let capture_backend = args.capture_backend;
 
-    let background_image_size = [1600., 1000.];
+    let background_image_size = [2200., 1600.];
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(background_image_size.map(|v| v * 0.5))
-            .with_resizable(false)
+            .with_resizable(true)
             .with_decorations(false)
             .with_icon(
                 // NOTE: Adding an icon is optional
@@ -188,7 +206,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Irminsul",
+        "Irminsul Multi-account",
         native_options,
         Box::new(move |cc| {
             Ok(Box::new(app::IrminsulApp::new(

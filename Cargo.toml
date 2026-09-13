@@ -1,16 +1,17 @@
 [package]
 name = "irminsul"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Konkers <konkers@konkers.net>"]
 edition = "2024"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
-rust-version = "1.85"
+rust-version = "1.88"
 
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
+irminsul-core = { path = "crates/irminsul-core" }
 # Keep these in sync with dev-dependencies below
 anime-game-data = { git = "https://github.com/konkers/anime-game-data", rev = "dfc03cdb5e27807a876b8d4dff17b3f67a320f5c" }
 flate2 = "1.1.9"
@@ -24,7 +25,7 @@ tokio = { version = "1.47.1", features = [
 anyhow = "1.0.99"
 async-trait = "0.1.92"
 async-watcher = "0.3.0"
-auto-artifactarium = { git = "https://github.com/konkers/auto-artifactarium", rev = "4ba25fac64b88970143af6bc2a2ef51338e620d0" }
+auto-artifactarium = { path = "crates/irminsul-core/vendor/auto-artifactarium" }
 base64 = "0.22.1"
 chrono = "0.4.42"
 clap = { version = "4.5.47", features = ["derive"] }
@@ -62,7 +63,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 
 [target.'cfg(windows)'.dependencies]
-pktmon = { version = "0.6.2", features = ["tokio"] }
+pktmon = { path = "crates/irminsul-core/vendor/pktmon", features = ["tokio"] }
 windows = { version = "0.61.3", features = [
 	"Win32_System_Console",
 	"Win32_System_Registry",
@@ -76,16 +77,6 @@ nix = { version = "0.31.3", features = ["user"] }
 caps = "0.5.6"
 
 [build-dependencies]
-# Keep these in sync with dependencies above
-anime-game-data = { git = "https://github.com/konkers/anime-game-data", rev = "dfc03cdb5e27807a876b8d4dff17b3f67a320f5c" }
-flate2 = "1.1.9"
-tokio = { version = "1.47.1", features = [
-	"rt",
-	"tokio-macros",
-	"macros",
-	"rt-multi-thread",
-] }
-
 winresource = "0.1.23"
 
 [features]
@@ -94,7 +85,8 @@ pcap = ["dep:pcap"]
 static-libpcap = ["pcap"]
 
 [profile.release]
-opt-level = 2 # fast and small wasm
+opt-level = 2
+strip = true
 
 # Optimize all dependencies even in debug builds:
 [profile.dev.package."*"]

@@ -23,6 +23,7 @@
 // SOFTWARE.
 
 #[cfg(windows)]
+#[allow(dead_code)]
 pub fn ensure_admin() {
     if unsafe { windows::Win32::UI::Shell::IsUserAnAdmin().into() } {
         tracing::info!("Running with admin privileges");

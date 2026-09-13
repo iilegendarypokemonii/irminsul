@@ -519,7 +519,6 @@ dependencies = [
 [[package]]
 name = "auto-artifactarium"
 version = "1.4.0"
-source = "git+https://github.com/konkers/auto-artifactarium?rev=4ba25fac64b88970143af6bc2a2ef51338e620d0#4ba25fac64b88970143af6bc2a2ef51338e620d0"
 dependencies = [
  "anyhow",
  "base64",
@@ -2335,7 +2334,7 @@ checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
 
 [[package]]
 name = "irminsul"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anime-game-data",
  "anyhow",
@@ -2358,6 +2357,7 @@ dependencies = [
  "futures",
  "futures-util",
  "indexmap",
+ "irminsul-core",
  "log",
  "nix",
  "notify",
@@ -2377,6 +2377,28 @@ dependencies = [
  "tracing-subscriber",
  "windows 0.61.3",
  "winresource",
+]
+
+[[package]]
+name = "irminsul-core"
+version = "0.3.0"
+dependencies = [
+ "anime-game-data",
+ "anyhow",
+ "auto-artifactarium",
+ "base64",
+ "etherparse",
+ "flate2",
+ "futures",
+ "getrandom 0.3.4",
+ "indexmap",
+ "pktmon",
+ "protobuf",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2528,7 +2550,7 @@ dependencies = [
 [[package]]
 name = "kcp"
 version = "0.6.0"
-source = "git+https://github.com/hashblen/mhy-kcp#1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f"
+source = "git+https://github.com/hashblen/mhy-kcp?rev=1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f#1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f"
 dependencies = [
  "bytes",
  "log",
@@ -3508,8 +3530,6 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 [[package]]
 name = "pktmon"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "138ba8229225b0334707e461dee957b8bbb0ca61c9be21d773991443e4364a08"
 dependencies = [
  "async-stream",
  "cidr",

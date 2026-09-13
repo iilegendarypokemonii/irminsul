@@ -1,3 +1,42 @@
+# Irminsul Multi-account
+
+An independent Windows fork of [konkers/irminsul](https://github.com/konkers/irminsul), focused on reliable account switching. It works as a standalone application; no optimizer installation is required. Original project information and credits are preserved below.
+
+## What changed
+
+- Separate, timestamped inventory snapshots for every captured UID.
+- Account switches reset inventory, equipment, and connection state while retaining the decoding hint for the current game process. A full restart clears that hint.
+- Select artifacts, characters, weapons, materials, or any combination for GOOD export. All rarities and actual artifact levels are preserved.
+- Account data and wish history have separate controls. A wish-cache authkey never labels an inventory snapshot.
+- Only the packet helper requests administrator permission. Capture errors, cancellation, and incomplete logins are visible; previous completed snapshots retain their account labels.
+- A reusable Rust core lets native applications provide the same tool in-app.
+
+## Install and use on Windows
+
+Requires **Windows 11 24H2 or newer, 64-bit Intel/AMD**. The new multi-account interface is currently released for Windows only; the legacy cross-platform backend is not part of this release.
+
+1. Download `irminsul-windows-x64.exe` from [this fork's releases](https://github.com/iilegendarypokemonii/irminsul/releases). If there is no release yet, the build is still being validated; developers can use the source instructions below.
+2. Run the executable. No installer, Node.js, or optimizer is required.
+3. Start capture and allow the Windows permission prompt. Then log into Genshin and enter the door.
+4. Select the captured UID and data categories, then save or copy a GOOD export.
+5. Keep capture running when switching accounts through the title menu. Each completed login gets its own snapshot. Stop capture when finished.
+
+Known materials are exported by name. Any materials missing bundled names are identified in a warning and preserved by item ID and quantity in the export metadata.
+
+The snapshot reflects inventory at login, not subsequent farming or upgrades. Begin capture before the first login after launching the game. If the initial login was missed, restart the game with capture running.
+
+Current multi-account support targets the pinned game protocol. Capture uses a private Windows Packet Monitor session without changing global filters or parsing translated command output. Passive capture does not establish that use is permitted by HoYoverse or free from account-enforcement risk. Do not share raw captures or wish URLs.
+
+## Build and verification
+
+Install stable Rust and the Windows C++ build tools, then run `cargo build --release --locked`. The standalone executable is `target/release/irminsul.exe`. Game data is bundled; starting the app does not download it. Updates check this fork's releases.
+
+Run `cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml --lib` for core tests. See [implementation and acceptance criteria](IMPLEMENTATION.md) and [the core interface](crates/irminsul-core/README.md). Source and documentation changes in this fork were assisted by AI and reviewed separately from upstream contributions.
+
+---
+
+## Original Irminsul project
+
 ![Screenshot](docs/src/images/main-window.webp)
 
 # Resources

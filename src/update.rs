@@ -12,18 +12,21 @@ use crate::{AppState, Message, State};
 
 pub fn check_for_new_version() -> Result<Option<Release>> {
     // This needs to be outside of an async context otherwise it panics.
-    let releases = thread::spawn(move || -> Result<Vec<Release>> {
-        let releases = self_update::backends::github::ReleaseList::configure()
-            .repo_owner("konkers")
-            .repo_name("irminsul")
-            .build()?
-            .fetch()?;
-        Ok(releases)
-    })
-    .join();
-    let releases = releases
-        .map_err(|_| anyhow!("error joining update thread"))?
-        .context("error fetching releases")?;
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let result = (|| -> Result<Vec<Release>> {
+            let releases = self_update::backends::github::ReleaseList::configure()
+                .repo_owner("iilegendarypokemonii")
+                .repo_name("irminsul")
+                .build()?
+                .fetch()?;
+            Ok(releases)
+        })();
+        let _ = tx.send(result);
+    });
+    let releases = rx
+        .recv_timeout(std::time::Duration::from_secs(8))
+        .context("Update check timed out; continuing offline.")??;
 
     // Assume the first release is the latest.
     let release = releases
@@ -31,7 +34,10 @@ pub fn check_for_new_version() -> Result<Option<Release>> {
         .ok_or(anyhow!("No releases found"))?
         .clone();
 
-    if release.version == self_update::cargo_crate_version!() {
+    if !self_update::version::bump_is_greater(
+        self_update::cargo_crate_version!(),
+        &release.version,
+    )? {
         tracing::info!(
             "{} is current, continuing with app startup",
             release.version
@@ -124,7 +130,10 @@ async fn download_new_version_and_replace_current(release: Release) -> Result<bo
     let tmp_exe_path = tmp_dir.path().join(&asset.name);
     let mut tmp_exe = ::std::fs::File::create(&tmp_exe_path)?;
 
-    let client = reqwest::Client::builder().gzip(true).build()?;
+    let client = reqwest::Client::builder()
+        .gzip(true)
+        .timeout(std::time::Duration::from_secs(120))
+        .build()?;
 
     #[derive(Deserialize)]
     struct DownloadMetadata {

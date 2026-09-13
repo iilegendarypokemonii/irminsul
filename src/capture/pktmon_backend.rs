@@ -12,7 +12,7 @@ pub struct PktmonBackend {
 
 impl PktmonBackend {
     pub fn new() -> Result<Self> {
-        let mut capture = Capture::new().map_err(|e| CaptureError::Capture {
+        let mut capture = Capture::isolated().map_err(|e| CaptureError::Capture {
             has_captured: false,
             error: e.into(),
         })?;

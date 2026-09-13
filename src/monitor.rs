@@ -124,7 +124,7 @@ impl Monitor {
                 cancel_token.cancel();
                 self.app_state.update_capturing_state(false);
             }
-            Message::ExportGenshinOptimizer(settings, reply_tx) => {
+            Message::ExportGenshinOptimizer(_, _, settings, reply_tx) => {
                 let _ = reply_tx.send(self.player_data.export_genshin_optimizer(&settings));
             }
             _ => (),

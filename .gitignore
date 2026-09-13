@@ -1,2 +1,7 @@
 /target
 /docs/book
+
+**/target/
+/captures/
+/qa-private/
+/crates/irminsul-core/vendor/*/Cargo.lock
