@@ -1,6 +1,6 @@
 use crate::{AppState, Message, State, capture::BackendType};
 use anyhow::Result;
-use irminsul_core::{CaptureController, DataSelection};
+use irminsul_core::CaptureController;
 use tokio::sync::{mpsc, watch};
 
 /// GUI adapter for the same capture core used by native integrations.
@@ -58,13 +58,9 @@ impl Monitor {
                     .controller
                     .snapshot(&uid, &capture_id)
                     .and_then(|snapshot| {
-                        let selection = DataSelection {
-                            artifacts: settings.include_artifacts,
-                            characters: settings.include_characters,
-                            weapons: settings.include_weapons,
-                            materials: settings.include_materials,
-                        };
-                        Ok(serde_json::to_string_pretty(&snapshot.export(&selection)?)?)
+                        Ok(serde_json::to_string_pretty(
+                            &snapshot.export_with_settings(&settings)?,
+                        )?)
                     });
                 let _ = reply.send(result);
             }

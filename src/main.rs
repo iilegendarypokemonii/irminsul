@@ -190,12 +190,12 @@ fn main() -> eframe::Result {
 
     let capture_backend = args.capture_backend;
 
-    let background_image_size = [2200., 1600.];
+    let background_image_size = [1600., 1000.];
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(background_image_size.map(|v| v * 0.5))
-            .with_resizable(true)
+            .with_resizable(false)
             .with_decorations(false)
             .with_icon(
                 // NOTE: Adding an icon is optional

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::good::{self, fake_uninitialized_4th_line};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct ExportSettings {
     pub include_characters: bool,
     pub include_artifacts: bool,
@@ -28,6 +29,12 @@ pub struct ExportSettings {
     pub min_weapon_refinement: u32,
     pub min_weapon_ascension: u32,
     pub min_weapon_rarity: u32,
+}
+
+impl Default for ExportSettings {
+    fn default() -> Self {
+        crate::session::all_settings()
+    }
 }
 
 pub struct PlayerData {

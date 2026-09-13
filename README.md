@@ -6,7 +6,7 @@ An independent Windows fork of [konkers/irminsul](https://github.com/konkers/irm
 
 - Separate, timestamped inventory snapshots for every captured UID.
 - Account switches reset inventory, equipment, and connection state while retaining the decoding hint for the current game process. A full restart clears that hint.
-- Select artifacts, characters, weapons, materials, or any combination for GOOD export. All rarities and actual artifact levels are preserved.
+- Select artifacts, characters, weapons, materials, or any combination for GOOD export. All rarities and actual artifact levels are preserved by default.
 - Account data and wish history have separate controls. A wish-cache authkey never labels an inventory snapshot.
 - Only the packet helper requests administrator permission. Capture errors, cancellation, and incomplete logins are visible; previous completed snapshots retain their account labels.
 - A reusable Rust core lets native applications provide the same tool in-app.
@@ -18,8 +18,10 @@ Requires **Windows 11 24H2 or newer, 64-bit Intel/AMD**. The new multi-account i
 1. Download `irminsul-windows-x64.exe` from [this fork's releases](https://github.com/iilegendarypokemonii/irminsul/releases). If there is no release yet, the build is still being validated; developers can use the source instructions below.
 2. Run the executable. No installer, Node.js, or optimizer is required.
 3. Start capture and allow the Windows permission prompt. Then log into Genshin and enter the door.
-4. Select the captured UID and data categories, then save or copy a GOOD export.
-5. Keep capture running when switching accounts through the title menu. Each completed login gets its own snapshot. Stop capture when finished.
+4. Select the captured UID. Use the gear beside Genshin Optimizer to choose data categories and minimum filters, then save or copy a GOOD export.
+5. Keep capture running when switching accounts through the title menu. Each completed login gets its own snapshot. Stop capture when finished. Capture stops automatically after four hours; completed snapshots stay available while the app remains open.
+
+The original artwork and compact control layout are retained, with an account selector and timestamped counts added. Export settings filter characters by level, ascension and constellation; artifacts by level and rarity; and weapons by level, refinement, ascension and rarity. Settings persist across restarts and never change the captured snapshot. The optional fake fourth-stat level-up defaults off because current Genshin Optimizer supports unactivated stats. Enabling it exports eligible 5-star artifacts below level 4 at level 4, after applying minimum-level filters to the actual level.
 
 Known materials are exported by name. Any materials missing bundled names are identified in a warning and preserved by item ID and quantity in the export metadata.
 

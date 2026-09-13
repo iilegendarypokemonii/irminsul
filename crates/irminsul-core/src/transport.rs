@@ -385,7 +385,8 @@ async fn capture_packets(socket: &mut tokio::net::TcpStream) -> Result<()> {
     }
     let mut packets = capture.stream()?.boxed();
     send_frame(socket, b'R', &[]).await?;
-    let deadline = tokio::time::sleep(Duration::from_secs(20 * 60));
+    // Allow one capture session to cover dailies across several accounts.
+    let deadline = tokio::time::sleep(Duration::from_secs(4 * 60 * 60));
     tokio::pin!(deadline);
     let mut control = [0u8; 1];
     loop {
