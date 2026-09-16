@@ -1,5 +1,5 @@
-use crate::{CaptureState, Engine, Snapshot, process, session::random_id};
-use anyhow::{Context, Result, bail, ensure};
+use crate::{CaptureMode, CaptureState, Engine, Snapshot, process, session::random_id};
+use anyhow::{Result, bail, ensure};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{
@@ -9,7 +9,8 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-const MAX_FRAME: usize = 65_536;
+// Full IPv4 datagram + Ethernet header + message type.
+const MAX_FRAME: usize = 65_550;
 const MAX_PENDING: usize = 1_048_576;
 
 /// The parent owns decoding and snapshots. The elevated child sends packets only;
@@ -47,6 +48,10 @@ impl CaptureController {
     }
 
     pub fn start(&mut self) -> Result<()> {
+        self.start_with_mode(CaptureMode::Auto)
+    }
+
+    pub fn start_with_mode(&mut self, mode: CaptureMode) -> Result<()> {
         ensure!(
             self.worker.as_ref().is_none_or(JoinHandle::is_finished),
             "Capture is already running or stopping."
@@ -57,7 +62,7 @@ impl CaptureController {
         self.stop.store(false, Ordering::Release);
         let (engine, stop, socket) = (self.engine.clone(), self.stop.clone(), self.socket.clone());
         self.worker = Some(thread::spawn(move || {
-            let result = capture_parent(&engine, &stop, &socket);
+            let result = capture_parent(&engine, &stop, &socket, mode);
             socket.lock().unwrap().take();
             let mut engine = engine.lock().unwrap();
             engine.stop();
@@ -111,18 +116,19 @@ fn capture_parent(
     engine: &Mutex<Engine>,
     stop: &AtomicBool,
     shared_socket: &Mutex<Option<TcpStream>>,
+    mode: CaptureMode,
 ) -> Result<()> {
-    let mut stream = match connect_helper(engine, stop) {
+    let mut stream = match connect_helper(engine, stop, mode) {
         Ok(stream) => stream,
         Err(_) if stop.load(Ordering::Acquire) => return Ok(()),
         Err(error) => return Err(error),
     };
     *shared_socket.lock().unwrap() = Some(stream.try_clone()?);
     stream.set_nonblocking(true)?;
-    engine.lock().unwrap().status(
-        "initializing",
-        "Connected. Starting Windows Packet Monitor...",
-    );
+    engine
+        .lock()
+        .unwrap()
+        .status("initializing", "Connected. Starting account capture...");
     receive_frames(engine, stop, &mut stream)
 }
 
@@ -147,7 +153,11 @@ fn receive_frames(engine: &Mutex<Engine>, stop: &AtomicBool, stream: &mut TcpStr
     }
 }
 
-fn connect_helper(engine: &Mutex<Engine>, stop: &AtomicBool) -> Result<TcpStream> {
+fn connect_helper(
+    engine: &Mutex<Engine>,
+    stop: &AtomicBool,
+    mode: CaptureMode,
+) -> Result<TcpStream> {
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let token = random_id()?;
     let port = listener.local_addr()?.port();
@@ -156,7 +166,7 @@ fn connect_helper(engine: &Mutex<Engine>, stop: &AtomicBool) -> Result<TcpStream
     // The Windows consent UI can outlive cancellation. Keep its blocking shell
     // call separate so the listener can close; a late helper then cannot capture.
     thread::spawn(move || {
-        let _ = launch_tx.send(process::launch_helper(port, &child_token));
+        let _ = launch_tx.send(process::launch_helper(port, &child_token, mode));
     });
     listener.set_nonblocking(true)?;
     engine.lock().unwrap().status(
@@ -294,7 +304,11 @@ fn handle_frame(engine: &Mutex<Engine>, frame: Vec<u8>) -> Result<()> {
     match frame[0] {
         b'R' => engine.lock().unwrap().status(
             "waiting",
-            "Capture is running. Log into an account and enter the door.",
+            if &frame[1..] == b"compatibility" {
+                "Compatibility capture is running. Log into an account and enter the door."
+            } else {
+                "Capture is running. Log into an account and enter the door."
+            },
         ),
         b'E' => bail!("{}", String::from_utf8_lossy(&frame[1..])),
         b'P' => {
@@ -320,8 +334,13 @@ pub fn run_helper_if_requested() -> Option<Result<()>> {
         return None;
     }
     Some((|| {
-        ensure!(args.len() == 3, "Invalid helper arguments.");
+        ensure!((3..=4).contains(&args.len()), "Invalid helper arguments.");
         let port = args[1].parse::<u16>()?;
+        let mode = args
+            .get(3)
+            .map(|value| value.parse())
+            .transpose()?
+            .unwrap_or_default();
         ensure!(
             args[2].len() == 64 && args[2].bytes().all(|b| b.is_ascii_hexdigit()),
             "Invalid helper identity."
@@ -329,16 +348,16 @@ pub fn run_helper_if_requested() -> Option<Result<()>> {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
-            .block_on(helper(port, &args[2]))
+            .block_on(helper(port, &args[2], mode))
     })())
 }
 
 #[cfg(windows)]
-async fn helper(port: u16, token: &str) -> Result<()> {
+async fn helper(port: u16, token: &str, mode: CaptureMode) -> Result<()> {
     use tokio::io::AsyncWriteExt;
     let mut socket = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port)).await?;
     socket.write_all(token.as_bytes()).await?;
-    let result = capture_packets(&mut socket).await;
+    let result = capture_packets(&mut socket, mode).await;
     if let Err(error) = &result {
         let _ = send_frame(&mut socket, b'E', error.to_string().as_bytes()).await;
     } else {
@@ -349,7 +368,7 @@ async fn helper(port: u16, token: &str) -> Result<()> {
 }
 
 #[cfg(not(windows))]
-async fn helper(_: u16, _: &str) -> Result<()> {
+async fn helper(_: u16, _: &str, _: CaptureMode) -> Result<()> {
     bail!("Windows capture helper unavailable.")
 }
 
@@ -366,25 +385,10 @@ async fn send_frame(socket: &mut tokio::net::TcpStream, kind: u8, data: &[u8]) -
 }
 
 #[cfg(windows)]
-async fn capture_packets(socket: &mut tokio::net::TcpStream) -> Result<()> {
-    use futures::StreamExt;
-    use pktmon::filter::{PktMonFilter, TransportProtocol};
+async fn capture_packets(socket: &mut tokio::net::TcpStream, mode: CaptureMode) -> Result<()> {
     use tokio::io::AsyncReadExt;
-    // A private session does not depend on localized CLI output and cannot stop
-    // another application's capture or erase its filters.
-    let mut capture = pktmon::Capture::isolated().context(
-        "Could not create a private Packet Monitor session. Windows 11 24H2 or newer and capture permission are required."
-    )?;
-    for port in [22101u16, 22102] {
-        capture.add_filter(PktMonFilter {
-            name: format!("Irminsul-{port}"),
-            transport_protocol: Some(TransportProtocol::UDP),
-            port: port.into(),
-            ..Default::default()
-        })?;
-    }
-    let mut packets = capture.stream()?.boxed();
-    send_frame(socket, b'R', &[]).await?;
+    let mut packets = crate::native_capture::PacketSource::open(mode)?;
+    send_frame(socket, b'R', packets.ready_label()).await?;
     // Allow one capture session to cover dailies across several accounts.
     let deadline = tokio::time::sleep(Duration::from_secs(4 * 60 * 60));
     tokio::pin!(deadline);
@@ -393,18 +397,27 @@ async fn capture_packets(socket: &mut tokio::net::TcpStream) -> Result<()> {
         let packet = tokio::select! {
             _ = socket.read(&mut control) => break,
             _ = &mut deadline => break,
-            packet = packets.next() => packet.context("Packet capture ended unexpectedly.")?,
+            packet = packets.next_packet() => packet?,
         };
-        send_frame(socket, b'P', &packet.payload.to_vec()).await?;
+        send_frame(socket, b'P', &packet).await?;
     }
     drop(packets);
-    // The stream owns Capture; dropping it stops and releases the private session.
+    // Dropping the source releases its private session or receive sockets.
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn compatibility_ready_message_is_visible() -> Result<()> {
+        let engine = Mutex::new(Engine::new()?);
+        handle_frame(&engine, b"Rcompatibility".to_vec())?;
+        let state = engine.lock().unwrap().state();
+        assert_eq!(state.phase, "waiting");
+        assert!(state.message.contains("Compatibility capture"));
+        Ok(())
+    }
     #[test]
     fn stopping_preserves_a_partially_received_frame() -> Result<()> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;

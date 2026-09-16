@@ -16,6 +16,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml --lib
+      - name: Verify compatibility capture with synthetic local UDP
+        run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml --lib native_compatibility_receives_udp_and_releases_sockets -- --ignored --nocapture
       - run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml -p auto-artifactarium --lib
       - run: cargo build --release --locked
       - uses: actions/upload-artifact@v6

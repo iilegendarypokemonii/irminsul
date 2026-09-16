@@ -7,7 +7,12 @@ fn main() -> Result<()> {
         return result;
     }
     let mut controller = CaptureController::new()?;
-    controller.start()?;
+    let mode = std::env::args()
+        .nth(1)
+        .map(|value| value.parse())
+        .transpose()?
+        .unwrap_or_default();
+    controller.start_with_mode(mode)?;
     let deadline = Instant::now() + Duration::from_secs(90);
     let mut previous_phase = String::new();
     loop {

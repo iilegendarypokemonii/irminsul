@@ -892,7 +892,7 @@ checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 
 [[package]]
 name = "irminsul-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anime-game-data",
  "anyhow",
@@ -908,6 +908,7 @@ dependencies = [
  "protobuf",
  "serde",
  "serde_json",
+ "socket2",
  "tokio",
  "tracing",
  "windows 0.61.3",

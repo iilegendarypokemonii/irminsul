@@ -64,7 +64,7 @@ pub fn game_process() -> Result<Option<String>> {
 }
 
 #[cfg(windows)]
-pub fn launch_helper(port: u16, token: &str) -> Result<()> {
+pub fn launch_helper(port: u16, token: &str, mode: crate::CaptureMode) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
@@ -76,10 +76,13 @@ pub fn launch_helper(port: u16, token: &str) -> Result<()> {
         .encode_wide()
         .chain(Some(0))
         .collect();
-    let arguments: Vec<u16> = format!("--irminsul-capture-helper {port} {token}")
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
+    let arguments: Vec<u16> = format!(
+        "--irminsul-capture-helper {port} {token} {}",
+        mode.argument()
+    )
+    .encode_utf16()
+    .chain(Some(0))
+    .collect();
     unsafe {
         let mut options = SHELLEXECUTEINFOW {
             cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
@@ -104,6 +107,6 @@ pub fn launch_helper(port: u16, token: &str) -> Result<()> {
 }
 
 #[cfg(not(windows))]
-pub fn launch_helper(_: u16, _: &str) -> Result<()> {
+pub fn launch_helper(_: u16, _: &str, _: crate::CaptureMode) -> Result<()> {
     anyhow::bail!("Capture is currently available on Windows.")
 }

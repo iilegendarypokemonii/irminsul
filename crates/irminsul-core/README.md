@@ -9,7 +9,8 @@ that immutable snapshot with `snapshot()`. `Snapshot::export()` selects any
 combination of artifacts, characters, weapons, and materials. Stop capture with
 `stop_and_wait()` before application update or exit.
 
-The helper uses Windows Packet Monitor, elevates separately, and sends only game
+The helper chooses private Windows Packet Monitor or Windows 10-compatible
+Winsock capture, elevates separately, and sends only game
 UDP packets to an authenticated loopback connection. The parent holds all
 decoding state. No authkey, raw packet log, or inventory file is written by the
 core. Hosts decide where to save an explicitly exported snapshot.
@@ -22,9 +23,21 @@ withhold the snapshot.
 
 The bundled game-data revision and decoder revision are recorded in
 `../../IMPLEMENTATION.md`. Protocol changes require a reviewed update and replay
-regressions. The live helper requires Windows 11 24H2 or newer and uses private Packet
-Monitor sessions without parsing localized output; other OS backends in upstream Irminsul are not covered by
-this fork's multi-account tests.
+regressions. `start()` selects the available backend automatically;
+`start_with_mode(CaptureMode::Compatibility)` explicitly chooses compatibility
+capture. The helper argument accepts only `auto` or `compatibility`.
+
+The compatibility backend uses Windows' documented `SIO_RCVALL` with
+`RCVALL_IPLEVEL` on active IPv4 addresses. It does not enable promiscuous mode,
+install a driver, or touch global Packet Monitor state. It filters both directions
+of UDP ports 22101/22102 before sending packets to the parent, wraps IPv4 packets
+for the existing Ethernet decoder, and bounds its queue to 4 MiB / 4096 packets.
+Receive sockets close on stop, parent disconnect, error, or the four-hour deadline.
+Changing network/VPN configuration requires restarting capture. IPv6-only capture
+is not provided by the compatibility backend.
+
+Reference: [Microsoft SIO_RCVALL documentation](https://learn.microsoft.com/en-us/windows/win32/winsock/sio-rcvall).
+The legacy Packet Monitor backend that resets global state remains unused.
 
 Private normalized fixtures can be replayed with:
 

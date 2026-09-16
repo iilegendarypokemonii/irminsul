@@ -13,7 +13,7 @@ An independent Windows fork of [konkers/irminsul](https://github.com/konkers/irm
 
 ## Install and use on Windows
 
-Requires **Windows 11 24H2 or newer, 64-bit Intel/AMD**. The new multi-account interface is currently released for Windows only; the legacy cross-platform backend is not part of this release.
+Version **0.4.0 and newer** supports **Windows 10 and 11, 64-bit Intel/AMD**. Capture automatically uses the compatible method without installing an extra driver. Compatibility capture requires an IPv4 connection; restart capture after changing networks or VPNs. The multi-account interface is currently released for Windows only.
 
 1. Download `irminsul-windows-x64.exe` from [this fork's releases](https://github.com/iilegendarypokemonii/irminsul/releases). If there is no release yet, the build is still being validated; developers can use the source instructions below.
 2. Run the executable. No installer, Node.js, or optimizer is required.
@@ -27,7 +27,7 @@ Known materials are exported by name. Any materials missing bundled names are id
 
 The snapshot reflects inventory at login, not subsequent farming or upgrades. Begin capture before the first login after launching the game. If the initial login was missed, restart the game with capture running.
 
-Current multi-account support targets the pinned game protocol. Capture uses a private Windows Packet Monitor session without changing global filters or parsing translated command output. Passive capture does not establish that use is permitted by HoYoverse or free from account-enforcement risk. Do not share raw captures or wish URLs.
+Current multi-account support targets the pinned game protocol. Capture uses a private Windows Packet Monitor session where available, with a Windows 10-compatible Winsock fallback. Neither method changes global Packet Monitor filters, stops other captures, or parses translated command output. Passive capture does not establish that use is permitted by HoYoverse or free from account-enforcement risk. Do not share raw captures or wish URLs.
 
 ## Build and verification
 

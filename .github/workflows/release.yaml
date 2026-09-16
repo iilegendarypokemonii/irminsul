@@ -18,6 +18,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml --lib
+      - name: Verify compatibility capture with synthetic local UDP
+        run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml --lib native_compatibility_receives_udp_and_releases_sockets -- --ignored --nocapture
       - run: cargo test --locked --manifest-path crates/irminsul-core/Cargo.toml -p auto-artifactarium --lib
       - run: cargo build --release --locked
       - name: Prepare portable executable
@@ -38,7 +40,9 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           artifacts: irminsul-windows-x64.exe,SHA256SUMS.txt
           body: |
-            Standalone account snapshots for Windows 11 24H2 or newer (x64).
+            Standalone account snapshots for Windows 10 and 11 (x64).
+            Automatic compatibility capture on older Windows; no extra driver required.
+            Compatibility mode uses IPv4. Restart capture after changing networks or VPNs.
             Download irminsul-windows-x64.exe, start capture, then enter the game door.
             Select an account and any combination of artifacts, characters, weapons, and materials.
             See README and VERIFICATION.md for supported workflow and validation limits.

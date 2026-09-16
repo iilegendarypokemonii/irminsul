@@ -291,8 +291,11 @@ impl PacketMonitorApi {
             macro_rules! get_proc_address {
                 ($name:expr) => {
                     transmute(
-                        GetProcAddress(module, s!($name))
-                            .ok_or_else(|| win::Error::from(GetLastError()))?,
+                        GetProcAddress(module, s!($name)).ok_or_else(|| {
+                            let error = win::Error::from(GetLastError());
+                            FreeLibrary(module);
+                            error
+                        })?,
                     )
                 };
             }
