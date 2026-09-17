@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum CaptureMode {
     #[default]
     Auto,
+    PacketMonitor,
     Compatibility,
 }
 
@@ -13,6 +14,7 @@ impl CaptureMode {
     pub(crate) fn argument(self) -> &'static str {
         match self {
             Self::Auto => "auto",
+            Self::PacketMonitor => "packetMonitor",
             Self::Compatibility => "compatibility",
         }
     }
@@ -24,10 +26,18 @@ impl std::str::FromStr for CaptureMode {
     fn from_str(value: &str) -> Result<Self> {
         match value {
             "auto" => Ok(Self::Auto),
+            "packetMonitor" => Ok(Self::PacketMonitor),
             "compatibility" => Ok(Self::Compatibility),
             _ => bail!("Unknown capture method."),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CaptureBackend {
+    PacketMonitor,
+    Winsock,
 }
 
 /// Try the private Packet Monitor implementation first. Compatibility capture
@@ -39,6 +49,11 @@ pub(crate) fn select_backend<T>(
 ) -> Result<T> {
     if mode == CaptureMode::Compatibility {
         return compatibility();
+    }
+    if mode == CaptureMode::PacketMonitor {
+        return modern().map_err(|error| anyhow::anyhow!(
+            "Packet Monitor could not start. It requires Windows 11 24H2 or newer. Choose Automatic or Winsock (IPv4). Details: {error:#}"
+        ));
     }
     match modern() {
         Ok(backend) => Ok(backend),
@@ -86,6 +101,29 @@ mod tests {
     }
 
     #[test]
+    fn explicit_packet_monitor_never_falls_back() -> Result<()> {
+        assert_eq!(
+            select_backend(
+                CaptureMode::PacketMonitor,
+                || Ok(1),
+                || panic!("unwanted fallback")
+            )?,
+            1
+        );
+        let error = select_backend::<()>(
+            CaptureMode::PacketMonitor,
+            || bail!("API unavailable"),
+            || panic!("must report the requested method's failure"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Windows 11 24H2"));
+        assert!(error.contains("Winsock"));
+        assert!(error.contains("API unavailable"));
+        Ok(())
+    }
+
+    #[test]
     fn both_failures_remain_actionable() {
         let error = select_backend::<()>(
             CaptureMode::Auto,
@@ -97,8 +135,13 @@ mod tests {
         assert!(error.contains("API unavailable"));
         assert!(error.contains("No active IPv4 connection"));
         assert!("unknown".parse::<CaptureMode>().is_err());
-        for mode in [CaptureMode::Auto, CaptureMode::Compatibility] {
+        for mode in [
+            CaptureMode::Auto,
+            CaptureMode::PacketMonitor,
+            CaptureMode::Compatibility,
+        ] {
             assert_eq!(mode.argument().parse::<CaptureMode>().unwrap(), mode);
+            assert_eq!(serde_json::to_value(mode).unwrap(), mode.argument());
         }
     }
 }

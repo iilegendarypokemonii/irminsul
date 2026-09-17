@@ -1,5 +1,5 @@
 use crate::{
-    game_data,
+    CaptureBackend, game_data,
     player_data::{ExportSettings, PlayerData},
 };
 use anyhow::{Context, Result, ensure};
@@ -117,6 +117,7 @@ impl Snapshot {
 #[serde(rename_all = "camelCase")]
 pub struct CaptureState {
     pub capturing: bool,
+    pub active_backend: Option<CaptureBackend>,
     pub phase: String,
     pub message: String,
     pub active_uid: Option<String>,
@@ -184,6 +185,7 @@ impl Engine {
 
     pub fn start(&mut self) -> Result<()> {
         self.reset_login()?;
+        self.state.active_backend = None;
         self.state.capturing = true;
         self.status("starting", "Waiting for capture permission…");
         Ok(())
@@ -191,9 +193,25 @@ impl Engine {
 
     pub fn stop(&mut self) {
         self.state.capturing = false;
+        self.state.active_backend = None;
         self.status(
             "idle",
             "Capture stopped. Completed snapshots remain available by account.",
+        );
+    }
+
+    pub(crate) fn ready(&mut self, backend: CaptureBackend) {
+        self.state.active_backend = Some(backend);
+        self.status(
+            "waiting",
+            match backend {
+                CaptureBackend::PacketMonitor => {
+                    "Packet Monitor capture is running. Log into an account and enter the door."
+                }
+                CaptureBackend::Winsock => {
+                    "Winsock (IPv4) capture is running. Log into an account and enter the door."
+                }
+            },
         );
     }
 

@@ -9,7 +9,7 @@ pub mod player_data;
 mod process;
 mod session;
 mod transport;
-pub use capture_mode::CaptureMode;
+pub use capture_mode::{CaptureBackend, CaptureMode};
 pub use session::{CaptureState, Counts, DataSelection, Engine, Snapshot, SnapshotSummary};
 pub use transport::{CaptureController, run_helper_if_requested};
 

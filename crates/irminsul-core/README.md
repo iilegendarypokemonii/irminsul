@@ -25,7 +25,7 @@ The bundled game-data revision and decoder revision are recorded in
 `../../IMPLEMENTATION.md`. Protocol changes require a reviewed update and replay
 regressions. `start()` selects the available backend automatically;
 `start_with_mode(CaptureMode::Compatibility)` explicitly chooses compatibility
-capture. The helper argument accepts only `auto` or `compatibility`.
+capture. The helper argument accepts only `auto`, `packetMonitor`, or `compatibility`.
 
 The compatibility backend uses Windows' documented `SIO_RCVALL` with
 `RCVALL_IPLEVEL` on active IPv4 addresses. It does not enable promiscuous mode,
@@ -46,3 +46,7 @@ cargo run --manifest-path crates/irminsul-core/Cargo.toml --example replay -- ou
 ```
 
 Never publish raw captures, authkeys, or personal inventories as fixtures.
+
+Since 0.4.1, `start_with_mode(CaptureMode::PacketMonitor)` explicitly selects the private Windows 11 24H2+ backend and reports failure instead of falling back. `Auto` still falls back to Winsock. `CaptureState.active_backend` reports the helper-confirmed method while capture is running, survives account changes, and clears when capture stops.
+
+For a live comparison on Windows 11 24H2+, run the `compare_capture` example with a private output directory. It starts both methods, writes `status.json` when both helpers are ready, and compares complete inventories from the next login, including artifact GUIDs. Outputs contain private account data; do not commit them. Both capture helpers are stopped before results are compared.

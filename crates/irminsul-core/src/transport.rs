@@ -1,4 +1,6 @@
-use crate::{CaptureMode, CaptureState, Engine, Snapshot, process, session::random_id};
+use crate::{
+    CaptureBackend, CaptureMode, CaptureState, Engine, Snapshot, process, session::random_id,
+};
 use anyhow::{Result, bail, ensure};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -302,14 +304,14 @@ fn take_frame(pending: &mut Vec<u8>) -> Result<Option<Vec<u8>>> {
 
 fn handle_frame(engine: &Mutex<Engine>, frame: Vec<u8>) -> Result<()> {
     match frame[0] {
-        b'R' => engine.lock().unwrap().status(
-            "waiting",
-            if &frame[1..] == b"compatibility" {
-                "Compatibility capture is running. Log into an account and enter the door."
-            } else {
-                "Capture is running. Log into an account and enter the door."
-            },
-        ),
+        b'R' => {
+            let backend = match &frame[1..] {
+                b"modern" => CaptureBackend::PacketMonitor,
+                b"compatibility" => CaptureBackend::Winsock,
+                _ => bail!("Unknown capture backend in helper readiness message."),
+            };
+            engine.lock().unwrap().ready(backend);
+        }
         b'E' => bail!("{}", String::from_utf8_lossy(&frame[1..])),
         b'P' => {
             let packet = frame[1..].to_vec();
@@ -415,7 +417,38 @@ mod tests {
         handle_frame(&engine, b"Rcompatibility".to_vec())?;
         let state = engine.lock().unwrap().state();
         assert_eq!(state.phase, "waiting");
-        assert!(state.message.contains("Compatibility capture"));
+        assert!(state.message.contains("Winsock (IPv4)"));
+        assert_eq!(state.active_backend, Some(CaptureBackend::Winsock));
+        Ok(())
+    }
+    #[test]
+    fn actual_backend_survives_account_changes_but_clears_on_restart() -> Result<()> {
+        let engine = Mutex::new(Engine::new()?);
+        engine.lock().unwrap().start()?;
+        assert_eq!(engine.lock().unwrap().state().active_backend, None);
+        handle_frame(&engine, b"Rmodern".to_vec())?;
+        let mut engine = engine.lock().unwrap();
+        engine.observe_process(Some("new-game-process".into()))?;
+        engine.status("ready", "Account snapshot complete.");
+        assert_eq!(
+            engine.state().active_backend,
+            Some(CaptureBackend::PacketMonitor)
+        );
+        assert_eq!(
+            serde_json::to_value(engine.state())?["activeBackend"],
+            "packetMonitor"
+        );
+        engine.stop();
+        assert_eq!(engine.state().active_backend, None);
+        engine.start()?;
+        assert_eq!(engine.state().active_backend, None);
+        Ok(())
+    }
+    #[test]
+    fn unknown_readiness_cannot_claim_a_backend() -> Result<()> {
+        let engine = Mutex::new(Engine::new()?);
+        assert!(handle_frame(&engine, b"Runrecognized".to_vec()).is_err());
+        assert_eq!(engine.lock().unwrap().state().active_backend, None);
         Ok(())
     }
     #[test]
