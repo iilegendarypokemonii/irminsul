@@ -30,7 +30,8 @@ The optimizer embeds the same core; Irminsul has no optimizer dependency.
 
 Upstream Irminsul: 781006e82d76b29b10b21125aa3bc1b79ddf7b3c.
 Vendored MIT decoder: konkers/auto-artifactarium at
-4ba25fac64b88970143af6bc2a2ef51338e620d0, with local session and parser fixes.
+abbbf7a3f58846512250a789a76be2d3cdb115c1 (Genshin 7.1), with local session and
+parser fixes.
 Its KCP dependency is pinned to 1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f.
 Vendored pktmon 0.6.2 retains its MIT license and exposes a private-session entry
 point. Capture requires Windows 11 24H2 or newer; no translated CLI output or

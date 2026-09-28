@@ -17,7 +17,8 @@ core. Hosts decide where to save an explicitly exported snapshot.
 
 The decoder hint is scoped to PID plus process creation time. Each login gets
 fresh account, connection, identity, and session-key state. The only routing
-identity is UID field 4 of the recognized login response for the pinned protocol;
+identity is the single scalar in the account UID range of the recognized login
+response (field numbers are reshuffled every game version; it was field 4 in 7.0);
 a cached wish URL is not inventory provenance. Unsupported identity or mappings
 withhold the snapshot.
 

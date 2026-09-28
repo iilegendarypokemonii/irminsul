@@ -402,25 +402,28 @@ impl Engine {
     }
 }
 
+/// Field numbers are reshuffled every game version (UID was field 4 in 7.0), so
+/// the UID is the only scalar in the account UID range, whichever field holds it.
 fn login_uid(body: &[u8]) -> Result<String> {
     let body = Unk::parse_from_bytes(body)?;
-    let values: Vec<_> = body
+    let candidates: Vec<(u32, u64)> = body
         .unknown_fields()
         .iter()
-        .filter_map(|(field, value)| match (field, value) {
-            (4, UnknownValueRef::Varint(uid)) => Some(uid),
+        .filter_map(|(field, value)| match value {
+            UnknownValueRef::Varint(uid) if (100_000_000..=u32::MAX as u64).contains(&uid) => {
+                Some((field, uid))
+            }
             _ => None,
         })
         .collect();
+    let values: BTreeSet<_> = candidates.iter().map(|(_, uid)| *uid).collect();
     ensure!(
         values.len() == 1,
-        "This login has no unambiguous account UID. Snapshot withheld."
+        "This login has no unambiguous account UID ({} candidates in fields {:?}). Snapshot withheld. The game may have updated; update the app.",
+        values.len(),
+        candidates.iter().map(|(field, _)| *field).collect::<Vec<_>>()
     );
-    ensure!(
-        (100_000_000..=u32::MAX as u64).contains(&values[0]),
-        "Unsupported account UID. Snapshot withheld."
-    );
-    Ok(values[0].to_string())
+    Ok(values.into_iter().next().unwrap().to_string())
 }
 
 fn counts(good: &Value) -> Counts {
@@ -707,6 +710,32 @@ mod tests {
         engine.accept_avatars(vec![])?;
         assert!(engine.snapshot("100000001", "old").is_err());
         assert!(engine.snapshot("100000002", &engine.capture_id).is_err());
+        Ok(())
+    }
+
+    fn login_body(fields: &[(u32, u64)]) -> Vec<u8> {
+        let mut body = Unk::new();
+        for (field, value) in fields {
+            body.mut_unknown_fields().add_varint(*field, *value);
+        }
+        body.mut_unknown_fields()
+            .add_length_delimited(9, b"702783084".to_vec());
+        body.write_to_bytes().unwrap()
+    }
+
+    #[test]
+    fn login_uid_is_found_in_any_field_but_must_be_unambiguous() -> Result<()> {
+        // 7.0 layout, and the same UID after a per-version field reshuffle.
+        assert_eq!(login_uid(&login_body(&[(1, 0), (4, 757970926)]))?, "757970926");
+        assert_eq!(login_uid(&login_body(&[(4, 3), (13, 701783084)]))?, "701783084");
+        assert_eq!(
+            login_uid(&login_body(&[(2, 701783084), (13, 701783084)]))?,
+            "701783084"
+        );
+        assert!(login_uid(&login_body(&[(4, 3), (7, 99_999_999)])).is_err());
+        assert!(login_uid(&login_body(&[(4, 1 << 40)])).is_err());
+        let conflict = login_uid(&login_body(&[(4, 757970926), (13, 701783084)]));
+        assert!(conflict.unwrap_err().to_string().contains("2 candidates"));
         Ok(())
     }
 
