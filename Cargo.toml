@@ -81,6 +81,7 @@ winresource = "0.1.23"
 
 [features]
 default = []
+fixtures = ["irminsul-core/fixtures"]
 pcap = ["dep:pcap"]
 static-libpcap = ["pcap"]
 

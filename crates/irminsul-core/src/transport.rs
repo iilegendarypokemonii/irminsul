@@ -49,6 +49,14 @@ impl CaptureController {
             .snapshot(uid, capture_id)
     }
 
+    #[cfg(feature = "fixtures")]
+    pub fn inject_fixture(&mut self, json: &str) -> Result<()> {
+        self.engine
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Capture worker stopped unexpectedly."))?
+            .inject_fixture(json)
+    }
+
     pub fn start(&mut self) -> Result<()> {
         self.start_with_mode(CaptureMode::Auto)
     }

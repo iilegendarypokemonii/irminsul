@@ -2,6 +2,8 @@
 mod capture_mode;
 mod compatibility;
 mod export;
+#[cfg(feature = "fixtures")]
+mod fixture;
 pub mod good;
 #[cfg(windows)]
 mod native_capture;

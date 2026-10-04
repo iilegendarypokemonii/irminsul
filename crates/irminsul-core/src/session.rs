@@ -1,3 +1,5 @@
+#[cfg(feature = "fixtures")]
+use crate::fixture::{FixtureAvatar, FixtureItem, VerificationFixture};
 use crate::{
     CaptureBackend, game_data,
     player_data::{ExportSettings, PlayerData},
@@ -400,6 +402,38 @@ impl Engine {
         );
         Ok(snapshot.clone())
     }
+
+    #[cfg(feature = "fixtures")]
+    pub fn inject_fixture(&mut self, json: &str) -> Result<()> {
+        let result = (|| {
+            let fixture: VerificationFixture = serde_json::from_str(json)?;
+            ensure!(
+                !self.state.capturing,
+                "Cannot inject a fixture while capture is active."
+            );
+            self.reset_login()?;
+            self.identify(fixture.uid)?;
+            self.accept_items(
+                fixture
+                    .items
+                    .into_iter()
+                    .map(FixtureItem::into_item)
+                    .collect::<Result<Vec<_>>>()?,
+            )?;
+            self.accept_avatars(
+                fixture
+                    .avatars
+                    .into_iter()
+                    .map(FixtureAvatar::into_avatar)
+                    .collect(),
+            )?;
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            self.fail(error.to_string());
+        }
+        result
+    }
 }
 
 /// Field numbers are reshuffled every game version (UID was field 4 in 7.0), so
@@ -700,6 +734,62 @@ mod tests {
         assert_eq!(engine.state().snapshots.len(), 1);
         engine.observe_process(Some("1:200".into()))?;
         assert!(engine.hint.is_none());
+        Ok(())
+    }
+
+    #[cfg(feature = "fixtures")]
+    #[test]
+    fn verification_fixture_uses_complete_accept_and_export_path() -> Result<()> {
+        let mut engine = Engine::new()?;
+        engine.inject_fixture(r#"{
+          "uid":"900000001",
+          "avatars":[
+            {"id":10000005,"guid":1,"type":1,"level":90,"ascension":6,"skillLevels":{"10128":10}},
+            {"id":10000134,"guid":2,"type":1,"level":90,"ascension":6},
+            {"id":10000140,"guid":3,"type":1,"level":90,"ascension":6,"equipGuids":[11]}
+          ],
+          "items":[
+            {"id":14437,"guid":10,"kind":"weapon","level":90,"ascension":6,"refinement":1},
+            {"id":20442,"guid":11,"kind":"artifact","level":20,"mainPropId":10001,"substatIds":[101051]},
+            {"id":100001,"guid":12,"kind":"material","count":3}
+          ]
+        }"#)?;
+        let state = engine.state();
+        assert_eq!(state.snapshots.len(), 1);
+        assert_eq!(state.snapshots[0].uid, "900000001");
+        assert_eq!(state.snapshots[0].counts.characters, 2);
+        assert_eq!(state.snapshots[0].counts.artifacts, 1);
+        assert_eq!(state.snapshots[0].counts.weapons, 1);
+        assert_eq!(state.snapshots[0].counts.materials, 1);
+        let snapshot = engine.snapshot("900000001", &state.snapshots[0].capture_id)?;
+        assert_eq!(snapshot.good["characters"][0]["key"], "TravelerCryo");
+        assert_eq!(snapshot.good["weapons"][0]["key"], "WintersHeavyHeart");
+        assert_eq!(snapshot.good["materials"]["Apple"], 3);
+        Ok(())
+    }
+
+    #[cfg(feature = "fixtures")]
+    #[test]
+    fn verification_fixture_rejects_unknown_fields_and_active_capture() -> Result<()> {
+        let mut engine = Engine::new()?;
+        let error = engine
+            .inject_fixture(r#"{"uid":"900000001","avatars":[],"items":[],"unexpected":true}"#)
+            .unwrap_err();
+        assert!(error.to_string().contains("unknown field"));
+        assert_eq!(engine.state().phase, "error");
+
+        let mut malformed = Engine::new()?;
+        let error = malformed.inject_fixture(r#"{"uid":"900000001","avatars":[],"items":[{"id":14437,"guid":1,"kind":"weapon","level":90,"ascension":6,"refinement":1,"count":1}]}"#).unwrap_err();
+        assert!(error.to_string().contains("incompatible fields"));
+        assert_eq!(malformed.state().phase, "error");
+
+        let mut active = Engine::new()?;
+        active.start()?;
+        let error = active
+            .inject_fixture(r#"{"uid":"900000001","avatars":[],"items":[]}"#)
+            .unwrap_err();
+        assert!(error.to_string().contains("capture is active"));
+        assert_eq!(active.state().phase, "error");
         Ok(())
     }
 

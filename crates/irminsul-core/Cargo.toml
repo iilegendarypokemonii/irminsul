@@ -5,6 +5,10 @@ edition = "2024"
 license = "MIT"
 description = "Account-scoped Genshin login snapshots shared by Irminsul and native clients"
 
+[features]
+default = []
+fixtures = []
+
 [dependencies]
 anyhow = "1"
 anime-game-data = { git = "https://github.com/konkers/anime-game-data", rev = "dfc03cdb5e27807a876b8d4dff17b3f67a320f5c" }
