@@ -36,5 +36,5 @@ Its KCP dependency is pinned to 1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f.
 Vendored pktmon 0.6.2 retains its MIT license and exposes a private-session entry
 point. Capture requires Windows 11 24H2 or newer; no translated CLI output or
 global filter mutation is used. See [verification results](VERIFICATION.md).
-Bundled public game data: 26df1dfbdf05a82bbb1d97506859f3e1c40718d8.
+Bundled public game data: 792978e5503ecfba73dcb3562ed44a0d35a2abe2 (refresh with `cargo run --example refresh_game_data` in `crates/irminsul-core`).
 Private recordings stay outside this repository.
