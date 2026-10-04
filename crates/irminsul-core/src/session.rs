@@ -405,12 +405,12 @@ impl Engine {
 
     #[cfg(feature = "fixtures")]
     pub fn inject_fixture(&mut self, json: &str) -> Result<SnapshotSummary> {
+        ensure!(
+            !self.state.capturing,
+            "Cannot inject a fixture while capture is active."
+        );
         let result = (|| {
             let fixture: VerificationFixture = serde_json::from_str(json)?;
-            ensure!(
-                !self.state.capturing,
-                "Cannot inject a fixture while capture is active."
-            );
             let uid = fixture.uid.clone();
             self.reset_login()?;
             self.identify(fixture.uid)?;
@@ -796,11 +796,12 @@ mod tests {
 
         let mut active = Engine::new()?;
         active.start()?;
+        let before = serde_json::to_value(active.state())?;
         let error = active
             .inject_fixture(r#"{"uid":"900000001","avatars":[],"items":[]}"#)
             .unwrap_err();
         assert!(error.to_string().contains("capture is active"));
-        assert_eq!(active.state().phase, "error");
+        assert_eq!(serde_json::to_value(active.state())?, before);
         Ok(())
     }
 

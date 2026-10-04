@@ -51,6 +51,10 @@ impl CaptureController {
 
     #[cfg(feature = "fixtures")]
     pub fn inject_fixture(&mut self, json: &str) -> Result<crate::SnapshotSummary> {
+        ensure!(
+            self.worker.as_ref().is_none_or(JoinHandle::is_finished),
+            "Cannot inject a fixture while capture is running or stopping."
+        );
         self.engine
             .lock()
             .map_err(|_| anyhow::anyhow!("Capture worker stopped unexpectedly."))?
