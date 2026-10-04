@@ -65,4 +65,12 @@ mod tests {
         assert!(keys.weapons.contains("WintersHeavyHeart"));
         assert!(keys.characters.contains("Vodyanitsa"));
     }
+
+    #[test]
+    fn bundled_game_data_identifies_tps_avatars() {
+        // Without these, TPS avatars export as an elementless "Traveler".
+        let data = super::game_data().unwrap();
+        assert!(data.get_tps_avatar_id_female().is_ok());
+        assert!(data.get_tps_avatar_id_male().is_ok());
+    }
 }

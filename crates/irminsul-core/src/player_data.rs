@@ -166,11 +166,11 @@ impl PlayerData {
                 // The Traveler is the only character that can change elements.
                 // The GOOD format lets you optionally suffix the Traveler's
                 // name with their element (e.g. `TravelerCryo`).
+                // An elementless "Traveler" is a TPS avatar that slipped past the
+                // filter above (7.1 game data hid their IDs); optimizers reject it.
                 let mut key = good::to_good_key(name);
-                if key == good::TRAVELER_KEY
-                    && let Some(element) = element
-                {
-                    key.push_str(element.as_ref());
+                if key == good::TRAVELER_KEY {
+                    key.push_str(element?.as_ref());
                 }
 
                 Some(good::Character {
@@ -352,5 +352,36 @@ impl PlayerData {
                 Some((good::to_good_key(name), material.count))
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use auto_artifactarium::r#gen::protos::PropValue;
+
+    fn avatar(avatar_id: u32) -> AvatarInfo {
+        let mut avatar = AvatarInfo::new();
+        avatar.avatar_id = avatar_id;
+        avatar.avatar_type = 1;
+        for (prop, val) in [(4001, 90), (1002, 6)] {
+            let mut value = PropValue::new();
+            value.val = val;
+            avatar.prop_map.insert(prop, value);
+        }
+        avatar
+    }
+
+    #[test]
+    fn exports_no_elementless_traveler() {
+        let mut player = PlayerData::new(crate::game_data().unwrap());
+        // TPS avatar, a Traveler without a known burst element, and Vodyanitsa.
+        player.process_characters(&[avatar(10000134), avatar(10000005), avatar(10000140)]);
+        let keys: Vec<_> = player
+            .export_genshin_optimizer_characters(&ExportSettings::default())
+            .into_iter()
+            .map(|c| c.key)
+            .collect();
+        assert_eq!(keys, ["Vodyanitsa"]);
     }
 }

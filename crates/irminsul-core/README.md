@@ -58,6 +58,10 @@ Each Genshin version needs two independent updates; 7.1 needed both.
 2. **Game data.** Run `cargo run --example refresh_game_data` in this crate once
    Dimbreath's data has the new version. It prints the added weapons and characters.
    Without it, captures holding new weapons fail with "Unknown weapon ID".
+   The game obfuscates field names between versions, which the data library
+   reports as missing values (7.1 hid the TPS avatar IDs, so imports failed on
+   an elementless `Traveler`). The tool keeps previous values for fields that
+   come back empty, with a warning, and refuses to write when a map shrinks.
 
 Upstream Irminsul downloads game data on every build; this core bundles a
 snapshot, so step 2 is never automatic. `bundled_good_keys()` lets a host test
