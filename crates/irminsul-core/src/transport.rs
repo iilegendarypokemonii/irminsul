@@ -50,7 +50,7 @@ impl CaptureController {
     }
 
     #[cfg(feature = "fixtures")]
-    pub fn inject_fixture(&mut self, json: &str) -> Result<()> {
+    pub fn inject_fixture(&mut self, json: &str) -> Result<crate::SnapshotSummary> {
         self.engine
             .lock()
             .map_err(|_| anyhow::anyhow!("Capture worker stopped unexpectedly."))?

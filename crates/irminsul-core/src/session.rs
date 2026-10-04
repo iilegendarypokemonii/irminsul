@@ -404,13 +404,14 @@ impl Engine {
     }
 
     #[cfg(feature = "fixtures")]
-    pub fn inject_fixture(&mut self, json: &str) -> Result<()> {
+    pub fn inject_fixture(&mut self, json: &str) -> Result<SnapshotSummary> {
         let result = (|| {
             let fixture: VerificationFixture = serde_json::from_str(json)?;
             ensure!(
                 !self.state.capturing,
                 "Cannot inject a fixture while capture is active."
             );
+            let uid = fixture.uid.clone();
             self.reset_login()?;
             self.identify(fixture.uid)?;
             self.accept_items(
@@ -427,7 +428,10 @@ impl Engine {
                     .map(FixtureAvatar::into_avatar)
                     .collect(),
             )?;
-            Ok(())
+            self.snapshots
+                .get(&uid)
+                .map(|snapshot| snapshot.summary.clone())
+                .context("Fixture did not produce a complete snapshot.")
         })();
         if let Err(error) = &result {
             self.fail(error.to_string());
