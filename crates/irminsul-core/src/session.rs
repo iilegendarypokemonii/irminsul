@@ -783,6 +783,13 @@ mod tests {
         assert!(error.to_string().contains("incompatible fields"));
         assert_eq!(malformed.state().phase, "error");
 
+        let mut unknown_weapon = Engine::new()?;
+        let error = unknown_weapon
+            .inject_fixture(r#"{"uid":"900000001","avatars":[],"items":[{"id":4294967295,"guid":1,"kind":"weapon","level":1,"ascension":0,"refinement":1}]}"#)
+            .unwrap_err();
+        assert!(error.to_string().contains("Unknown weapon"));
+        assert_eq!(unknown_weapon.state().phase, "error");
+
         let mut active = Engine::new()?;
         active.start()?;
         let error = active
