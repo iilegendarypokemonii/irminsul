@@ -48,6 +48,21 @@ cargo run --manifest-path crates/irminsul-core/Cargo.toml --example replay -- ou
 
 Never publish raw captures, authkeys, or personal inventories as fixtures.
 
+## Updating for a new game version
+
+Each Genshin version needs two independent updates; 7.1 needed both.
+
+1. **Decoder.** When konkers/auto-artifactarium publishes "Update for X.Y", port
+   its command-ID and proto field changes into `vendor/auto-artifactarium`.
+   Without it, captures fail at login ("no unambiguous account UID") or export nothing.
+2. **Game data.** Run `cargo run --example refresh_game_data` in this crate once
+   Dimbreath's data has the new version. It prints the added weapons and characters.
+   Without it, captures holding new weapons fail with "Unknown weapon ID".
+
+Upstream Irminsul downloads game data on every build; this core bundles a
+snapshot, so step 2 is never automatic. `bundled_good_keys()` lets a host test
+that the snapshot covers every key it knows.
+
 Since 0.4.1, `start_with_mode(CaptureMode::PacketMonitor)` explicitly selects the private Windows 11 24H2+ backend and reports failure instead of falling back. `Auto` still falls back to Winsock. `CaptureState.active_backend` reports the helper-confirmed method while capture is running, survives account changes, and clears when capture stops.
 
 For a live comparison on Windows 11 24H2+, run the `compare_capture` example with a private output directory. It starts both methods, writes `status.json` when both helpers are ready, and compares complete inventories from the next login, including artifact GUIDs. Outputs contain private account data; do not commit them. Both capture helpers are stopped before results are compared.

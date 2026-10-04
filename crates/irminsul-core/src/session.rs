@@ -421,7 +421,10 @@ fn login_uid(body: &[u8]) -> Result<String> {
         values.len() == 1,
         "This login has no unambiguous account UID ({} candidates in fields {:?}). Snapshot withheld. The game may have updated; update the app.",
         values.len(),
-        candidates.iter().map(|(field, _)| *field).collect::<Vec<_>>()
+        candidates
+            .iter()
+            .map(|(field, _)| *field)
+            .collect::<Vec<_>>()
     );
     Ok(values.into_iter().next().unwrap().to_string())
 }
@@ -726,8 +729,14 @@ mod tests {
     #[test]
     fn login_uid_is_found_in_any_field_but_must_be_unambiguous() -> Result<()> {
         // 7.0 layout, and the same UID after a per-version field reshuffle.
-        assert_eq!(login_uid(&login_body(&[(1, 0), (4, 757970926)]))?, "757970926");
-        assert_eq!(login_uid(&login_body(&[(4, 3), (13, 701783084)]))?, "701783084");
+        assert_eq!(
+            login_uid(&login_body(&[(1, 0), (4, 757970926)]))?,
+            "757970926"
+        );
+        assert_eq!(
+            login_uid(&login_body(&[(4, 3), (13, 701783084)]))?,
+            "701783084"
+        );
         assert_eq!(
             login_uid(&login_body(&[(2, 701783084), (13, 701783084)]))?,
             "701783084"
